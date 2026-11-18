@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hand Popper 🎈</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000; font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #fff; user-select: none;
+  }
+  #game-container { position: relative; width: 100vw; height: 100vh; }
+  #video {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; object-fit: cover;
+    transform: scaleX(-1); /* mirror for selfie feel */
+  }
+  #canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    transform: scaleX(-1);
+  }
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 16px 24px; display: flex; justify-content: space-between;
+    align-items: center; pointer-events: none; z-index: 10;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  }
+  .hud-box {
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+    padding: 10px 18px; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.15);
+    font-weight: 600; font-size: 16px;
+  }
+  .hud-box span { color: #ffd54a; font-size: 20px; margin-left: 6px; }
+  #overlay {
+    position: absolute; inset: 0; z-index: 20;
+    background: radial-gradient(circle at center, rgba(20,20,40,0.85), rgba(0,0,0,0.95));
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; padding: 24px;
+  }
+  #overlay h1 {
+    font-size: clamp(36px, 7vw, 72px); margin-bottom: 12px;
+    background: linear-gradient(90deg,#ff6ec7,#ffd54a,#6ee7ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: 2px;
+  }
+  #overlay p { font-size: 18px; max-width: 520px; line-height: 1.5; opacity: 0.85; margin-bottom: 24px; }
+  #overlay button {
+    padding: 16px 40px; font-size: 20px; font-weight: 700;
+    border: none; border-radius: 50px; cursor: pointer;
+    background: linear-gradient(135deg,#ff6ec7,#6ee7ff);
+    color: #111; box-shadow: 0 8px 24px rgba(110,231,255,0.4);
+    transition: transform 0.15s;
+  }
+  #overlay button:hover { transform: scale(1.05); }
+  .hidden { display: none !important; }
+  #combo-popup {
+    position: absolute; top: 40%; left: 50%;
+    transform: translate(-50%,-50%);
+    font-size: 64px; font-weight: 900;
+    color: #ffd54a; text-shadow: 0 0 20px #ff6ec7;
+    opacity: 0; pointer-events: none; z-index: 15;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  #level-banner {
+    position: absolute; top: 30%; left: 50%;
+    transform: translate(-50%,-50%) scale(0.5);
+    font-size: 80px; font-weight: 900;
+    color: #fff; text-shadow: 0 0 30px #6ee7ff;
+    opacity: 0; pointer-events: none; z-index: 15;
+    transition: all 0.6s cubic-bezier(.2,1.4,.4,1);
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="hud-box">Level <span id="level-num">1</span></div>
+    <div class="hud-box">Score <span id="score-num">0</span></div>
+    <div class="hud-box">Time <span id="time-num">30</span></div>
+    <div class="hud-box">Lives <span id="lives-num">❤❤❤</span></div>
+  </div>
+
+  <div id="combo-popup"></div>
+  <div id="level-banner"></div>
+
+  <div id="overlay">
+    <h1>HAND POPPER</h1>
+    <p>Pop the bubbles with your <b>fingertips</b>! Use both hands for double the fun. Reach the target score before time runs out to advance.</p>
+    <button id="start-btn">🎥 Start Game</button>
+  </div>
+</div>
+
+<!-- MediaPipe via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js"></script>
+
+<script>
+/* =========================================================
+   HAND POPPER — Game Logic
+   ========================================================= */
+const video    = document.getElementById('video');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const overlay  = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const hud      = document.getElementById('hud');
+const levelNum = document.getElementById('level-num');
+const scoreNum = document.getElementById('score-num');
+const timeNum  = document.getElementById('time-num');
+const livesNum = document.getElementById('lives-num');
+const comboPop = document.getElementById('combo-popup');
+const levelBanner = document.getElementById('level-banner');
+
+/* ---------- Level definitions ---------- */
+const LEVELS = [
+  { name: 'Warm Up',       time: 30, target: 10, spawnMs: 1200, speed: 0.4, maxBubbles: 4,  colors: ['#ff6ec7','#6ee7ff'] },
+  { name: 'Getting Warmer',time: 30, target: 20, spawnMs: 900,  speed: 0.7, maxBubbles: 6,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'] },
+  { name: 'Speedy',        time: 28, target: 30, spawnMs: 700,  speed: 1.0, maxBubbles: 8,  colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'] },
+  { name: 'Chaos!',        time: 25, target: 45, spawnMs: 500,  speed: 1.4, maxBubbles: 12, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'] },
+  { name: 'Master',        time: 25, target: 60, spawnMs: 400,  speed: 1.8, maxBubbles: 15, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'] },
+];
+
+/* ---------- Game state ---------- */
+let state = {
+  running: false,
+  levelIdx: 0,
+  score: 0,
+  lives: 3,
+  timeLeft: 0,
+  bubbles: [],
+  particles: [],
+  fingertips: [],     // {x,y} in canvas coords
+  lastSpawn: 0,
+  combo: 0,
+  comboTimer: 0,
+};
+
+/* ---------- Resize ---------- */
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- MediaPipe Hands ---------- */
+const hands = new Hands({
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+});
+hands.setOptions({
+  maxNumHands: 2,
+  modelComplexity: 0,     // 0 = lite, faster
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.5,
+});
+hands.onResults(onHandResults);
+
+/* Fingertip landmark indices (per hand) */
+const TIP_IDS = [4, 8, 12, 16, 20]; // thumb, index, middle, ring, pinky
+
+function onHandResults(results) {
+  state.fingertips = [];
+  if (results.multiHandLandmarks) {
+    for (const hand of results.multiHandLandmarks) {
+      for (const id of TIP_IDS) {
+        const lm = hand[id];
+        state.fingertips.push({
+          x: lm.x * canvas.width,
+          y: lm.y * canvas.height,
+        });
+      }
+    }
+  }
+}
+
+/* ---------- Camera ---------- */
+let camera;
+async function startCamera() {
+  camera = new Camera(video, {
+    onFrame: async () => { await hands.send({ image: video }); },
+    width: 1280, height: 720,
+  });
+  await camera.start();
+}
+
+/* ---------- Bubble (target) ---------- */
+class Bubble {
+  constructor(level) {
+    this.r = 30 + Math.random() * 30;
+    this.x = this.r + Math.random() * (canvas.width - this.r * 2);
+    this.y = canvas.height + this.r;
+    this.vy = -(0.8 + Math.random() * 1.2) * level.speed;
+    this.vx = (Math.random() - 0.5) * 0.6 * level.speed;
+    this.color = level.colors[Math.floor(Math.random() * level.colors.length)];
+    this.wobble = Math.random() * Math.PI * 2;
+    this.alive = true;
+    this.points = Math.round(60 - this.r); // smaller = more points
+  }
+  update(dt) {
+    this.wobble += dt * 0.003;
+    this.x += this.vx + Math.sin(this.wobble) * 0.3;
+    this.y += this.vy;
+    if (this.y + this.r < 0) {
+      this.alive = false;
+      return 'escaped';
+    }
+    return null;
+  }
+  draw(ctx) {
+    const grad = ctx.createRadialGradient(
+      this.x - this.r*0.3, this.y - this.r*0.3, this.r*0.1,
+      this.x, this.y, this.r
+    );
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.25, this.color);
+    grad.addColorStop(1, this.color + '88');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+    // shine
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(this.x - this.r*0.35, this.y - this.r*0.35, this.r*0.18, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+/* ---------- Particle burst ---------- */
+class Particle {
+  constructor(x, y, color) {
+    this.x = x; this.y = y;
+    const a = Math.random() * Math.PI * 2;
+    const s = 2 + Math.random() * 5;
+    this.vx = Math.cos(a) * s;
+    this.vy = Math.sin(a) * s;
+    this.life = 1;
+    this.color = color;
+    this.size = 3 + Math.random() * 4;
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    this.vy += 0.15;
+    this.life -= 0.025;
+  }
+  draw(ctx) {
+    ctx.globalAlpha = Math.max(0, this.life);
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function burst(x, y, color, n = 18) {
+  for (let i = 0; i < n; i++) state.particles.push(new Particle(x, y, color));
+}
+
+/* ---------- Collision ---------- */
+function checkCollisions() {
+  for (const b of state.bubbles) {
+    if (!b.alive) continue;
+    for (const f of state.fingertips) {
+      const dx = f.x - b.x, dy = f.y - b.y;
+      if (dx*dx + dy*dy < b.r * b.r) {
+        b.alive = false;
+        burst(b.x, b.y, b.color);
+        // scoring
+        state.combo++;
+        state.comboTimer = 1200;
+        const mult = Math.min(5, 1 + Math.floor(state.combo / 5));
+        const pts = b.points * mult;
+        state.score += pts;
+        scoreNum.textContent = state.score;
+        if (state.combo > 0 && state.combo % 5 === 0) {
+          showCombo(`x${mult} COMBO!`);
+        }
+        break;
+      }
+    }
+  }
+}
+
+/* ---------- UI helpers ---------- */
+function showCombo(text) {
+  comboPop.textContent = text;
+  comboPop.style.opacity = '1';
+  comboPop.style.transform = 'translate(-50%,-50%) scale(1.2)';
+  setTimeout(() => {
+    comboPop.style.opacity = '0';
+    comboPop.style.transform = 'translate(-50%,-50%) scale(0.8)';
+  }, 700);
+}
+function showLevelBanner(text) {
+  levelBanner.textContent = text;
+  levelBanner.style.opacity = '1';
+  levelBanner.style.transform = 'translate(-50%,-50%) scale(1)';
+  setTimeout(() => {
+    levelBanner.style.opacity = '0';
+    levelBanner.style.transform = 'translate(-50%,-50%) scale(1.5)';
+  }, 1400);
+}
+function updateLives() {
+  livesNum.textContent = '❤'.repeat(state.lives) + '♡'.repeat(3 - state.lives);
+}
+
+/* ---------- Main loop ---------- */
+let lastT = 0;
+function loop(t) {
+  const dt = Math.min(50, t - lastT);
+  lastT = t;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state.running) {
+    // spawn
+    const lvl = LEVELS[state.levelIdx];
+    state.lastSpawn += dt;
+    if (state.lastSpawn > lvl.spawnMs && state.bubbles.length < lvl.maxBubbles) {
+      state.bubbles.push(new Bubble(lvl));
+      state.lastSpawn = 0;
+    }
+
+    // update bubbles
+    for (const b of state.bubbles) {
+      const ev = b.update(dt);
+      if (ev === 'escaped') {
+        state.combo = 0;
+        state.lives--;
+        updateLives();
+        if (state.lives <= 0) return endGame(false);
+      }
+    }
+    state.bubbles = state.bubbles.filter(b => b.alive);
+
+    // combo decay
+    state.comboTimer -= dt;
+    if (state.comboTimer <= 0) state.combo = 0;
+
+    // collisions
+    checkCollisions();
+
+    // level complete?
+    if (state.score >= lvl.target) {
+      return nextLevel();
+    }
+
+    // draw bubbles
+    for (const b of state.bubbles) b.draw(ctx);
+  }
+
+  // particles (always animate)
+  for (const p of state.particles) { p.update(); p.draw(ctx); }
+  state.particles = state.particles.filter(p => p.life > 0);
+
+  // draw fingertips
+  for (const f of state.fingertips) {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 18, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 7, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Level flow ---------- */
+function startLevel(idx) {
+  state.levelIdx = idx;
+  const lvl = LEVELS[idx];
+  state.timeLeft = lvl.time;
+  state.score = 0;
+  state.bubbles = [];
+  state.particles = [];
+  state.combo = 0;
+  state.running = true;
+  levelNum.textContent = idx + 1;
+  scoreNum.textContent = 0;
+  timeNum.textContent = state.timeLeft;
+  updateLives();
+  showLevelBanner(`Level ${idx+1}: ${lvl.name}`);
+  runTimer();
+}
+function runTimer() {
+  if (!state.running) return;
+  state.timeLeft--;
+  timeNum.textContent = state.timeLeft;
+  if (state.timeLeft <= 0) return endGame(false);
+  setTimeout(runTimer, 1000);
+}
+function nextLevel() {
+  state.running = false;
+  if (state.levelIdx + 1 >= LEVELS.length) return endGame(true);
+  state.lives = Math.min(3, state.lives + 1); // reward a life
+  setTimeout(() => startLevel(state.levelIdx + 1), 1500);
+}
+function endGame(won) {
+  state.running = false;
+  overlay.classList.remove('hidden');
+  overlay.querySelector('h1').textContent = won ? '🏆 YOU WIN!' : '💥 Game Over';
+  overlay.querySelector('p').innerHTML =
+    `You reached <b>Level ${state.levelIdx + 1}</b> with a final score of <b>${state.score}</b>.<br/>Ready to try again?`;
+  startBtn.textContent = '🔄 Play Again';
+  hud.classList.add('hidden');
+}
+
+/* ---------- Start ---------- */
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  startBtn.textContent = 'Requesting camera…';
+  try {
+    if (!camera) await startCamera();
+    overlay.classList.add('hidden');
+    hud.classList.remove('hidden');
+    state.lives = 3;
+    startLevel(0);
+  } catch (err) {
+    alert('Camera access denied or unavailable: ' + err.message);
+    startBtn.disabled = false;
+    startBtn.textContent = '🎥 Start Game';
+  }
+});
+</script>
+</body>
+</html>
