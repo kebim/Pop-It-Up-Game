@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Hand Popper 🎈 v3</title>
+<title>Hand Popper 🎈 v4</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -124,6 +124,19 @@
     animation: spin 1s linear infinite; margin-bottom: 20px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .float-text {
+    position: absolute;
+    font-size: 32px;
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 12;
+    animation: floatUp 1s ease-out forwards;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-80px) scale(1.3); }
+  }
 </style>
 </head>
 <body>
@@ -133,7 +146,7 @@
 
   <div id="hud" class="hidden">
     <div class="hud-box">Level <span id="level-num">1</span></div>
-    <div class="hud-box">Score <span id="score-num">0</span> / <span id="target-num">15</span></div>
+    <div class="hud-box">Score <span id="score-num">0</span> / <span id="target-num">50</span></div>
     <div class="hud-box">Time <span id="time-num">35</span></div>
     <div class="hud-box">Lives <span id="lives-num">❤❤❤</span></div>
   </div>
@@ -160,9 +173,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js"></script>
 
 <script>
-/* =========================================================
-   HAND POPPER v3.0 — Fixed coordinates & level transitions
-   ========================================================= */
 const video    = document.getElementById('video');
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
@@ -181,6 +191,7 @@ const levelBanner = document.getElementById('level-banner');
 const countdownEl = document.getElementById('countdown');
 const powerupIndicator = document.getElementById('powerup-indicator');
 const loadingEl = document.getElementById('loading');
+const gameContainer = document.getElementById('game-container');
 
 /* ---------- Audio ---------- */
 const audio = {
@@ -205,13 +216,13 @@ const audio = {
   }
 };
 
-/* ---------- Levels ---------- */
+/* ---------- Levels (FIXED: higher targets, lower points) ---------- */
 const LEVELS = [
-  { name: 'Warm Up',        time: 35, target: 15, spawnMs: 1300, speed: 0.5, maxBubbles: 5,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.06 },
-  { name: 'Getting Warmer', time: 32, target: 25, spawnMs: 1000, speed: 0.8, maxBubbles: 7,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
-  { name: 'Speedy',         time: 30, target: 40, spawnMs: 800,  speed: 1.1, maxBubbles: 9,  colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'], powerupChance: 0.10 },
-  { name: 'Chaos!',         time: 28, target: 55, spawnMs: 600,  speed: 1.5, maxBubbles: 13, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'], powerupChance: 0.12 },
-  { name: 'Master',         time: 26, target: 75, spawnMs: 450,  speed: 1.9, maxBubbles: 16, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'], powerupChance: 0.15 },
+  { name: 'Warm Up',        time: 40, target: 50,  spawnMs: 1200, speed: 0.5, maxBubbles: 6,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
+  { name: 'Getting Warmer', time: 38, target: 100, spawnMs: 1000, speed: 0.8, maxBubbles: 8,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.10 },
+  { name: 'Speedy',         time: 35, target: 150, spawnMs: 800,  speed: 1.1, maxBubbles: 10, colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'], powerupChance: 0.12 },
+  { name: 'Chaos!',         time: 32, target: 200, spawnMs: 600,  speed: 1.5, maxBubbles: 14, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'], powerupChance: 0.14 },
+  { name: 'Master',         time: 30, target: 300, spawnMs: 450,  speed: 1.9, maxBubbles: 18, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'], powerupChance: 0.16 },
 ];
 
 /* ---------- State ---------- */
@@ -223,7 +234,6 @@ let state = {
   timeLeft: 0,
   bubbles: [],
   particles: [],
-  floatTexts: [],
   fingertips: [],
   lastSpawn: 0,
   combo: 0,
@@ -244,11 +254,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---------- KEY FIX: Map MediaPipe coords to displayed video rect ----------
-   Video uses object-fit: cover, so it may be cropped. MediaPipe returns
-   coords in original video frame space. We must map them to where the
-   video actually appears on screen. Both video and canvas have CSS
-   scaleX(-1), so we do NOT mirror in JS — CSS handles it uniformly. */
+/* ---------- Map MediaPipe coords to displayed video rect ---------- */
 function getVideoRect() {
   const vw = video.videoWidth  || 1280;
   const vh = video.videoHeight || 720;
@@ -258,11 +264,9 @@ function getVideoRect() {
   const wa = ww / wh;
   let dw, dh, ox, oy;
   if (wa > va) {
-    // Window wider than video → video fills width, cropped top/bottom
     dw = ww; dh = ww / va;
     ox = 0;  oy = (wh - dh) / 2;
   } else {
-    // Window taller than video → video fills height, cropped sides
     dh = wh; dw = wh * va;
     ox = (ww - dw) / 2; oy = 0;
   }
@@ -291,8 +295,6 @@ function onHandResults(results) {
     for (const hand of results.multiHandLandmarks) {
       for (const id of TIP_IDS) {
         const lm = hand[id];
-        // Map to displayed video rect. No JS mirroring — CSS mirrors both
-        // video and canvas the same way, so coords align automatically.
         state.fingertips.push({
           x: rect.x + lm.x * rect.w,
           y: rect.y + lm.y * rect.h,
@@ -301,7 +303,6 @@ function onHandResults(results) {
       }
     }
   }
-  // Preserve trails across frames for smooth motion
   if (prev.length === state.fingertips.length) {
     for (let i = 0; i < prev.length; i++) {
       state.fingertips[i].trail = prev[i].trail;
@@ -323,7 +324,7 @@ async function startCamera() {
   await camera.start();
 }
 
-/* ---------- Bubble ---------- */
+/* ---------- Bubble (FIXED: reduced points) ---------- */
 class Bubble {
   constructor(level) {
     this.r = 32 + Math.random() * 28;
@@ -334,7 +335,8 @@ class Bubble {
     this.color = level.colors[Math.floor(Math.random() * level.colors.length)];
     this.wobble = Math.random() * Math.PI * 2;
     this.alive = true;
-    this.points = Math.round(65 - this.r);
+    // FIXED: Reduced points from (65-r) to (20-r*0.2), range is now 8-14
+    this.points = Math.round(20 - this.r * 0.2);
     this.isPowerup = Math.random() < level.powerupChance;
     this.powerupType = this.isPowerup ? ['freeze','slow','double'][Math.floor(Math.random()*3)] : null;
     this.pulse = Math.random() * Math.PI * 2;
@@ -409,38 +411,35 @@ class Particle {
   }
 }
 
-class FloatText {
-  constructor(x, y, text, color) {
-    this.x = x; this.y = y; this.text = text; this.color = color;
-    this.life = 1; this.vy = -2;
-  }
-  update() { this.y += this.vy; this.vy *= 0.95; this.life -= 0.02; }
-  draw(ctx) {
-    ctx.globalAlpha = Math.max(0, this.life);
-    ctx.fillStyle = this.color;
-    ctx.font = 'bold 28px Segoe UI';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(this.text, this.x, this.y);
-    ctx.globalAlpha = 1;
-  }
+/* ---------- Float text (FIXED: DOM-based, not mirrored) ---------- */
+function showFloatText(x, y, text, color) {
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  el.style.color = color;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  gameContainer.appendChild(el);
+  setTimeout(() => el.remove(), 1000);
 }
 
 function burst(x, y, color, n = 22) {
   for (let i = 0; i < n; i++) state.particles.push(new Particle(x, y, color));
 }
 
-/* ---------- Collisions ---------- */
+/* ---------- Collisions (FIXED: larger collision buffer) ---------- */
 function checkCollisions() {
   for (const b of state.bubbles) {
     if (!b.alive) continue;
     for (const f of state.fingertips) {
       const dx = f.x - b.x, dy = f.y - b.y;
-      if (dx*dx + dy*dy < (b.r + 8) * (b.r + 8)) {
+      // FIXED: Increased buffer from 8 to 15 for better feel
+      if (dx*dx + dy*dy < (b.r + 15) * (b.r + 15)) {
         b.alive = false;
         if (b.isPowerup) {
           activatePowerup(b.powerupType);
           burst(b.x, b.y, '#ffd54a', 30);
-          state.floatTexts.push(new FloatText(b.x, b.y, 'POWER!', '#ffd54a'));
+          showFloatText(b.x, b.y, 'POWER!', '#ffd54a');
           audio.play('powerup');
         } else {
           burst(b.x, b.y, b.color, 22);
@@ -451,7 +450,7 @@ function checkCollisions() {
           const pts = b.points * mult;
           state.score += pts;
           scoreNum.textContent = state.score;
-          state.floatTexts.push(new FloatText(b.x, b.y, `+${pts}`, '#fff'));
+          showFloatText(b.x, b.y, `+${pts}`, '#fff');
           updateTargetBar();
           if (state.combo > 0 && state.combo % 5 === 0) showCombo(`x${mult} COMBO!`);
         }
@@ -475,7 +474,6 @@ function updatePowerup(dt) {
   if (!state.powerup) return;
   state.powerupTimer -= dt;
   if (state.powerupTimer <= 0) {
-    // Restore bubble speeds based on current level
     const lvl = LEVELS[state.levelIdx];
     state.bubbles.forEach(b => {
       const sign = b.vy < 0 ? -1 : 1;
@@ -593,10 +591,7 @@ function loop(t) {
 
   for (const p of state.particles) { p.update(); p.draw(ctx); }
   state.particles = state.particles.filter(p => p.life > 0);
-  for (const f of state.floatTexts) { f.update(); f.draw(ctx); }
-  state.floatTexts = state.floatTexts.filter(f => f.life > 0);
 
-  // Fingertips with trails
   for (const f of state.fingertips) {
     f.trail.push({ x: f.x, y: f.y });
     if (f.trail.length > 10) f.trail.shift();
@@ -638,12 +633,11 @@ function startLevel(idx) {
   state.score = 0;
   state.bubbles = [];
   state.particles = [];
-  state.floatTexts = [];
   state.combo = 0;
   state.comboTimer = 0;
   state.powerup = null;
   state.powerupTimer = 0;
-  state.lastSpawn = lvl.spawnMs; // spawn first bubble immediately
+  state.lastSpawn = lvl.spawnMs;
   state.running = false;
 
   levelNum.textContent = idx + 1;
@@ -706,7 +700,6 @@ startBtn.addEventListener('click', async () => {
 
   try {
     if (!camera) await startCamera();
-    // Wait briefly for model to initialize
     let waited = 0;
     while (!state.modelReady && waited < 8000) {
       await new Promise(r => setTimeout(r, 100));
