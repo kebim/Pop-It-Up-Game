@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Hand Popper 🎈 v4</title>
+<title>Hand Popper 🎈 v5</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -216,7 +216,7 @@ const audio = {
   }
 };
 
-/* ---------- Levels (FIXED: higher targets, lower points) ---------- */
+/* ---------- Levels ---------- */
 const LEVELS = [
   { name: 'Warm Up',        time: 40, target: 50,  spawnMs: 1200, speed: 0.5, maxBubbles: 6,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
   { name: 'Getting Warmer', time: 38, target: 100, spawnMs: 1000, speed: 0.8, maxBubbles: 8,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.10 },
@@ -324,35 +324,65 @@ async function startCamera() {
   await camera.start();
 }
 
-/* ---------- Bubble (FIXED: reduced points) ---------- */
+/* ---------- Bubble (FIXED: robust velocity management) ---------- */
 class Bubble {
   constructor(level) {
     this.r = 32 + Math.random() * 28;
     this.x = this.r + Math.random() * (canvas.width - this.r * 2);
     this.y = canvas.height + this.r + Math.random() * 100;
-    this.vy = -(0.9 + Math.random() * 1.2) * level.speed;
-    this.vx = (Math.random() - 0.5) * 0.6 * level.speed;
+    this.level = level;
+    this.resetVelocity();
     this.color = level.colors[Math.floor(Math.random() * level.colors.length)];
     this.wobble = Math.random() * Math.PI * 2;
     this.alive = true;
-    // FIXED: Reduced points from (65-r) to (20-r*0.2), range is now 8-14
     this.points = Math.round(20 - this.r * 0.2);
     this.isPowerup = Math.random() < level.powerupChance;
     this.powerupType = this.isPowerup ? ['freeze','slow','double'][Math.floor(Math.random()*3)] : null;
     this.pulse = Math.random() * Math.PI * 2;
     this.spawnAnim = 0;
   }
+  
+  resetVelocity() {
+    // FIXED: Always ensure negative vy (moving up) with minimum speed
+    this.vy = -(0.9 + Math.random() * 1.2) * this.level.speed;
+    this.vx = (Math.random() - 0.5) * 0.6 * this.level.speed;
+    // Ensure minimum absolute velocity
+    if (Math.abs(this.vy) < 0.3) this.vy = -0.5 * this.level.speed;
+    if (Math.abs(this.vx) < 0.1) this.vx = 0.2 * this.level.speed * (Math.random() > 0.5 ? 1 : -1);
+  }
+  
   update(dt) {
     this.spawnAnim = Math.min(1, this.spawnAnim + dt * 0.004);
     this.wobble += dt * 0.003;
     this.pulse += dt * 0.006;
+    
     this.x += this.vx + Math.sin(this.wobble) * 0.4;
     this.y += this.vy;
-    if (this.x < this.r) { this.x = this.r; this.vx *= -1; }
-    if (this.x > canvas.width - this.r) { this.x = canvas.width - this.r; this.vx *= -1; }
+    
+    // FIXED: Better edge handling - ensure velocity always points away from edge
+    if (this.x < this.r) {
+      this.x = this.r;
+      this.vx = Math.abs(this.vx); // Always positive (moving right)
+      if (this.vx < 0.1) this.vx = 0.3;
+    }
+    if (this.x > canvas.width - this.r) {
+      this.x = canvas.width - this.r;
+      this.vx = -Math.abs(this.vx); // Always negative (moving left)
+      if (Math.abs(this.vx) < 0.1) this.vx = -0.3;
+    }
+    
+    // FIXED: Safety check - if bubble moves down or stops, reset velocity
+    if (this.vy >= 0 || Math.abs(this.vy) < 0.1) {
+      this.resetVelocity();
+    }
+    
+    // Escape conditions
     if (this.y + this.r < 0) { this.alive = false; return 'escaped'; }
+    if (this.y > canvas.height + 200) { this.alive = false; return 'escaped'; }
+    
     return null;
   }
+  
   draw(ctx) {
     const pulse = this.isPowerup ? 1 + Math.sin(this.pulse) * 0.15 : 1;
     const r = this.r * pulse * this.spawnAnim;
@@ -411,7 +441,7 @@ class Particle {
   }
 }
 
-/* ---------- Float text (FIXED: DOM-based, not mirrored) ---------- */
+/* ---------- Float text ---------- */
 function showFloatText(x, y, text, color) {
   const el = document.createElement('div');
   el.className = 'float-text';
@@ -427,13 +457,12 @@ function burst(x, y, color, n = 22) {
   for (let i = 0; i < n; i++) state.particles.push(new Particle(x, y, color));
 }
 
-/* ---------- Collisions (FIXED: larger collision buffer) ---------- */
+/* ---------- Collisions ---------- */
 function checkCollisions() {
   for (const b of state.bubbles) {
     if (!b.alive) continue;
     for (const f of state.fingertips) {
       const dx = f.x - b.x, dy = f.y - b.y;
-      // FIXED: Increased buffer from 8 to 15 for better feel
       if (dx*dx + dy*dy < (b.r + 15) * (b.r + 15)) {
         b.alive = false;
         if (b.isPowerup) {
@@ -460,7 +489,7 @@ function checkCollisions() {
   }
 }
 
-/* ---------- Powerups ---------- */
+/* ---------- Powerups (FIXED: robust velocity reset) ---------- */
 function activatePowerup(type) {
   state.powerup = type;
   state.powerupTimer = type === 'freeze' ? 5000 : 6000;
@@ -468,17 +497,19 @@ function activatePowerup(type) {
   powerupIndicator.textContent = text;
   powerupIndicator.style.opacity = '1';
   const factor = type === 'freeze' ? 0.05 : 0.5;
-  state.bubbles.forEach(b => { b.vy *= factor; b.vx *= factor; });
+  state.bubbles.forEach(b => { 
+    b.vy *= factor; 
+    b.vx *= factor; 
+  });
 }
+
 function updatePowerup(dt) {
   if (!state.powerup) return;
   state.powerupTimer -= dt;
   if (state.powerupTimer <= 0) {
-    const lvl = LEVELS[state.levelIdx];
+    // FIXED: Reset all bubble velocities properly
     state.bubbles.forEach(b => {
-      const sign = b.vy < 0 ? -1 : 1;
-      b.vy = sign * (0.9 + Math.random() * 1.2) * lvl.speed;
-      b.vx = (Math.random() - 0.5) * 0.6 * lvl.speed;
+      b.resetVelocity();
     });
     state.powerup = null;
     powerupIndicator.style.opacity = '0';
