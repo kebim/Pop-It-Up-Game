@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Hand Popper 🎈 v5</title>
+<title>Hand Popper 🎈 v6</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -47,7 +47,6 @@
     height: 100%; width: 0%;
     background: linear-gradient(90deg, #6ee7ff, #ffd54a, #ff6ec7);
     transition: width 0.3s;
-    box-shadow: 0 0 10px rgba(255,213,74,0.6);
   }
   #overlay {
     position: absolute; inset: 0; z-index: 20;
@@ -60,11 +59,6 @@
     background: linear-gradient(90deg,#ff6ec7,#ffd54a,#6ee7ff);
     -webkit-background-clip: text; background-clip: text; color: transparent;
     letter-spacing: 3px; font-weight: 900;
-    animation: glow 2s ease-in-out infinite;
-  }
-  @keyframes glow {
-    0%, 100% { filter: drop-shadow(0 0 20px rgba(255,110,199,0.5)); }
-    50% { filter: drop-shadow(0 0 40px rgba(110,231,255,0.8)); }
   }
   #overlay p { font-size: 18px; max-width: 560px; line-height: 1.6; opacity: 0.9; margin-bottom: 28px; }
   #overlay button {
@@ -72,7 +66,7 @@
     border: none; border-radius: 50px; cursor: pointer;
     background: linear-gradient(135deg,#ff6ec7,#6ee7ff);
     color: #111; box-shadow: 0 8px 32px rgba(110,231,255,0.5);
-    transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;
+    transition: all 0.2s;
   }
   #overlay button:hover { transform: scale(1.06); }
   #overlay button:disabled { opacity: 0.6; cursor: wait; }
@@ -92,7 +86,6 @@
     color: #fff; text-shadow: 0 0 40px #6ee7ff;
     opacity: 0; pointer-events: none; z-index: 15;
     transition: all 0.8s cubic-bezier(.2,1.6,.4,1);
-    text-align: center;
   }
   #countdown {
     position: absolute; top: 50%; left: 50%;
@@ -101,16 +94,6 @@
     color: #ffd54a; text-shadow: 0 0 60px #ff6ec7;
     opacity: 0; pointer-events: none; z-index: 15;
     transition: all 0.5s cubic-bezier(.2,1.4,.4,1);
-  }
-  #powerup-indicator {
-    position: absolute; bottom: 24px; left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.75); backdrop-filter: blur(10px);
-    padding: 12px 24px; border-radius: 20px;
-    border: 2px solid #ffd54a;
-    font-size: 18px; font-weight: 700;
-    opacity: 0; transition: opacity 0.3s;
-    z-index: 10; pointer-events: none;
   }
   #loading {
     position: absolute; inset: 0; z-index: 30;
@@ -147,7 +130,7 @@
   <div id="hud" class="hidden">
     <div class="hud-box">Level <span id="level-num">1</span></div>
     <div class="hud-box">Score <span id="score-num">0</span> / <span id="target-num">50</span></div>
-    <div class="hud-box">Time <span id="time-num">35</span></div>
+    <div class="hud-box">Time <span id="time-num">40</span></div>
     <div class="hud-box">Lives <span id="lives-num">❤❤❤</span></div>
   </div>
   <div id="target-bar" class="hidden"><div id="target-fill"></div></div>
@@ -155,11 +138,10 @@
   <div id="combo-popup"></div>
   <div id="level-banner"></div>
   <div id="countdown"></div>
-  <div id="powerup-indicator"></div>
 
   <div id="overlay">
     <h1>HAND POPPER</h1>
-    <p>Pop the bubbles with your <b>fingertips</b>! Use both hands. Catch golden power-ups. Reach the target score before time runs out!</p>
+    <p>Pop the bubbles with your <b>fingertips</b>! Use both hands. Reach the target score before time runs out!</p>
     <button id="start-btn">🎥 Start Game</button>
   </div>
 
@@ -189,7 +171,6 @@ const livesNum = document.getElementById('lives-num');
 const comboPop = document.getElementById('combo-popup');
 const levelBanner = document.getElementById('level-banner');
 const countdownEl = document.getElementById('countdown');
-const powerupIndicator = document.getElementById('powerup-indicator');
 const loadingEl = document.getElementById('loading');
 const gameContainer = document.getElementById('game-container');
 
@@ -200,29 +181,28 @@ const audio = {
   play(type) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    const tone = (freq, dur, vol = 0.25, type = 'sine') => {
+    const tone = (freq, dur, vol = 0.25) => {
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
-      o.type = type; o.frequency.value = freq;
+      o.frequency.value = freq;
       o.connect(g); g.connect(this.ctx.destination);
       g.gain.setValueAtTime(vol, now);
       g.gain.exponentialRampToValueAtTime(0.001, now + dur);
       o.start(now); o.stop(now + dur);
     };
     if (type === 'pop') tone(600 + Math.random()*400, 0.08, 0.2);
-    else if (type === 'powerup') { tone(500, 0.15); setTimeout(()=>tone(900, 0.15), 80); }
-    else if (type === 'miss') tone(180, 0.2, 0.2, 'sawtooth');
+    else if (type === 'miss') tone(180, 0.2, 0.2);
     else if (type === 'levelup') { tone(523, 0.15); setTimeout(()=>tone(659, 0.15), 100); setTimeout(()=>tone(784, 0.25), 200); }
   }
 };
 
 /* ---------- Levels ---------- */
 const LEVELS = [
-  { name: 'Warm Up',        time: 40, target: 50,  spawnMs: 1200, speed: 0.5, maxBubbles: 6,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
-  { name: 'Getting Warmer', time: 38, target: 100, spawnMs: 1000, speed: 0.8, maxBubbles: 8,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.10 },
-  { name: 'Speedy',         time: 35, target: 150, spawnMs: 800,  speed: 1.1, maxBubbles: 10, colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'], powerupChance: 0.12 },
-  { name: 'Chaos!',         time: 32, target: 200, spawnMs: 600,  speed: 1.5, maxBubbles: 14, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'], powerupChance: 0.14 },
-  { name: 'Master',         time: 30, target: 300, spawnMs: 450,  speed: 1.9, maxBubbles: 18, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'], powerupChance: 0.16 },
+  { name: 'Warm Up',        time: 40, target: 50,  spawnMs: 1200, speed: 0.5, maxBubbles: 6,  colors: ['#ff6ec7','#6ee7ff'] },
+  { name: 'Getting Warmer', time: 38, target: 100, spawnMs: 1000, speed: 0.8, maxBubbles: 8,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'] },
+  { name: 'Speedy',         time: 35, target: 150, spawnMs: 800,  speed: 1.1, maxBubbles: 10, colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'] },
+  { name: 'Chaos!',         time: 32, target: 200, spawnMs: 600,  speed: 1.5, maxBubbles: 14, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'] },
+  { name: 'Master',         time: 30, target: 300, spawnMs: 450,  speed: 1.9, maxBubbles: 18, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'] },
 ];
 
 /* ---------- State ---------- */
@@ -238,10 +218,6 @@ let state = {
   lastSpawn: 0,
   combo: 0,
   comboTimer: 0,
-  powerup: null,
-  powerupTimer: 0,
-  shakeAmount: 0,
-  shakeTime: 0,
   timerInterval: null,
   modelReady: false,
 };
@@ -254,7 +230,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---------- Map MediaPipe coords to displayed video rect ---------- */
+/* ---------- Map MediaPipe coords ---------- */
 function getVideoRect() {
   const vw = video.videoWidth  || 1280;
   const vh = video.videoHeight || 720;
@@ -324,78 +300,53 @@ async function startCamera() {
   await camera.start();
 }
 
-/* ---------- Bubble (FIXED: robust velocity management) ---------- */
+/* ---------- Bubble (SIMPLIFIED) ---------- */
 class Bubble {
   constructor(level) {
     this.r = 32 + Math.random() * 28;
     this.x = this.r + Math.random() * (canvas.width - this.r * 2);
     this.y = canvas.height + this.r + Math.random() * 100;
-    this.level = level;
-    this.resetVelocity();
+    this.vy = -(0.9 + Math.random() * 1.2) * level.speed;
+    this.vx = (Math.random() - 0.5) * 0.6 * level.speed;
     this.color = level.colors[Math.floor(Math.random() * level.colors.length)];
     this.wobble = Math.random() * Math.PI * 2;
     this.alive = true;
     this.points = Math.round(20 - this.r * 0.2);
-    this.isPowerup = Math.random() < level.powerupChance;
-    this.powerupType = this.isPowerup ? ['freeze','slow','double'][Math.floor(Math.random()*3)] : null;
-    this.pulse = Math.random() * Math.PI * 2;
     this.spawnAnim = 0;
-  }
-  
-  resetVelocity() {
-    // FIXED: Always ensure negative vy (moving up) with minimum speed
-    this.vy = -(0.9 + Math.random() * 1.2) * this.level.speed;
-    this.vx = (Math.random() - 0.5) * 0.6 * this.level.speed;
-    // Ensure minimum absolute velocity
-    if (Math.abs(this.vy) < 0.3) this.vy = -0.5 * this.level.speed;
-    if (Math.abs(this.vx) < 0.1) this.vx = 0.2 * this.level.speed * (Math.random() > 0.5 ? 1 : -1);
   }
   
   update(dt) {
     this.spawnAnim = Math.min(1, this.spawnAnim + dt * 0.004);
     this.wobble += dt * 0.003;
-    this.pulse += dt * 0.006;
     
     this.x += this.vx + Math.sin(this.wobble) * 0.4;
     this.y += this.vy;
     
-    // FIXED: Better edge handling - ensure velocity always points away from edge
+    // Simple edge bounce
     if (this.x < this.r) {
       this.x = this.r;
-      this.vx = Math.abs(this.vx); // Always positive (moving right)
-      if (this.vx < 0.1) this.vx = 0.3;
+      this.vx = Math.abs(this.vx) || 0.3;
     }
     if (this.x > canvas.width - this.r) {
       this.x = canvas.width - this.r;
-      this.vx = -Math.abs(this.vx); // Always negative (moving left)
-      if (Math.abs(this.vx) < 0.1) this.vx = -0.3;
+      this.vx = -(Math.abs(this.vx) || 0.3);
     }
     
-    // FIXED: Safety check - if bubble moves down or stops, reset velocity
-    if (this.vy >= 0 || Math.abs(this.vy) < 0.1) {
-      this.resetVelocity();
+    // Escape
+    if (this.y + this.r < 0) {
+      this.alive = false;
+      return 'escaped';
     }
-    
-    // Escape conditions
-    if (this.y + this.r < 0) { this.alive = false; return 'escaped'; }
-    if (this.y > canvas.height + 200) { this.alive = false; return 'escaped'; }
     
     return null;
   }
   
   draw(ctx) {
-    const pulse = this.isPowerup ? 1 + Math.sin(this.pulse) * 0.15 : 1;
-    const r = this.r * pulse * this.spawnAnim;
+    const r = this.r * this.spawnAnim;
     const grad = ctx.createRadialGradient(this.x - r*0.3, this.y - r*0.3, r*0.1, this.x, this.y, r);
-    if (this.isPowerup) {
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.3, '#ffd54a');
-      grad.addColorStop(1, '#ff6ec7');
-    } else {
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.3, this.color);
-      grad.addColorStop(1, this.color + '66');
-    }
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.3, this.color);
+    grad.addColorStop(1, this.color + '66');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(this.x, this.y, r, 0, Math.PI*2);
@@ -404,13 +355,6 @@ class Bubble {
     ctx.beginPath();
     ctx.arc(this.x - r*0.35, this.y - r*0.35, r*0.18, 0, Math.PI*2);
     ctx.fill();
-    if (this.isPowerup) {
-      ctx.fillStyle = '#fff';
-      ctx.font = `bold ${r*0.7}px Arial`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const icon = this.powerupType === 'freeze' ? '❄' : this.powerupType === 'slow' ? '⏱' : '×2';
-      ctx.fillText(icon, this.x, this.y);
-    }
   }
 }
 
@@ -465,54 +409,20 @@ function checkCollisions() {
       const dx = f.x - b.x, dy = f.y - b.y;
       if (dx*dx + dy*dy < (b.r + 15) * (b.r + 15)) {
         b.alive = false;
-        if (b.isPowerup) {
-          activatePowerup(b.powerupType);
-          burst(b.x, b.y, '#ffd54a', 30);
-          showFloatText(b.x, b.y, 'POWER!', '#ffd54a');
-          audio.play('powerup');
-        } else {
-          burst(b.x, b.y, b.color, 22);
-          audio.play('pop');
-          state.combo++;
-          state.comboTimer = 1500;
-          const mult = state.powerup === 'double' ? 4 : Math.min(5, 1 + Math.floor(state.combo / 5));
-          const pts = b.points * mult;
-          state.score += pts;
-          scoreNum.textContent = state.score;
-          showFloatText(b.x, b.y, `+${pts}`, '#fff');
-          updateTargetBar();
-          if (state.combo > 0 && state.combo % 5 === 0) showCombo(`x${mult} COMBO!`);
-        }
+        burst(b.x, b.y, b.color, 22);
+        audio.play('pop');
+        state.combo++;
+        state.comboTimer = 1500;
+        const mult = Math.min(5, 1 + Math.floor(state.combo / 5));
+        const pts = b.points * mult;
+        state.score += pts;
+        scoreNum.textContent = state.score;
+        showFloatText(b.x, b.y, `+${pts}`, '#fff');
+        updateTargetBar();
+        if (state.combo > 0 && state.combo % 5 === 0) showCombo(`x${mult} COMBO!`);
         break;
       }
     }
-  }
-}
-
-/* ---------- Powerups (FIXED: robust velocity reset) ---------- */
-function activatePowerup(type) {
-  state.powerup = type;
-  state.powerupTimer = type === 'freeze' ? 5000 : 6000;
-  const text = type === 'freeze' ? '❄️ TIME FROZEN!' : type === 'slow' ? '⏱️ SLOW MOTION!' : '×2️⃣ DOUBLE POINTS!';
-  powerupIndicator.textContent = text;
-  powerupIndicator.style.opacity = '1';
-  const factor = type === 'freeze' ? 0.05 : 0.5;
-  state.bubbles.forEach(b => { 
-    b.vy *= factor; 
-    b.vx *= factor; 
-  });
-}
-
-function updatePowerup(dt) {
-  if (!state.powerup) return;
-  state.powerupTimer -= dt;
-  if (state.powerupTimer <= 0) {
-    // FIXED: Reset all bubble velocities properly
-    state.bubbles.forEach(b => {
-      b.resetVelocity();
-    });
-    state.powerup = null;
-    powerupIndicator.style.opacity = '0';
   }
 }
 
@@ -564,7 +474,6 @@ function showCountdown(n, cb) {
 function updateLives() {
   livesNum.textContent = '❤'.repeat(state.lives) + '♡'.repeat(Math.max(0, 3 - state.lives));
 }
-function shakeScreen(a = 8) { state.shakeAmount = a; state.shakeTime = 300; }
 
 /* ---------- Main loop ---------- */
 let lastT = 0;
@@ -572,24 +481,13 @@ function loop(t) {
   const dt = Math.min(50, t - lastT);
   lastT = t;
 
-  let sx = 0, sy = 0;
-  if (state.shakeTime > 0) {
-    sx = (Math.random() - 0.5) * state.shakeAmount;
-    sy = (Math.random() - 0.5) * state.shakeAmount;
-    state.shakeTime -= dt;
-    state.shakeAmount *= 0.9;
-  }
-
-  ctx.save();
-  ctx.translate(sx, sy);
-  ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (state.running) {
     const lvl = LEVELS[state.levelIdx];
-    const spawnMult = state.powerup === 'freeze' ? 3 : (state.powerup === 'slow' ? 1.5 : 1);
 
     state.lastSpawn += dt;
-    if (state.lastSpawn > lvl.spawnMs * spawnMult && state.bubbles.length < lvl.maxBubbles) {
+    if (state.lastSpawn > lvl.spawnMs && state.bubbles.length < lvl.maxBubbles) {
       state.bubbles.push(new Bubble(lvl));
       state.lastSpawn = 0;
     }
@@ -600,9 +498,8 @@ function loop(t) {
         state.combo = 0;
         state.lives--;
         updateLives();
-        shakeScreen(14);
         audio.play('miss');
-        if (state.lives <= 0) { endGame(false); ctx.restore(); requestAnimationFrame(loop); return; }
+        if (state.lives <= 0) { endGame(false); requestAnimationFrame(loop); return; }
       }
     }
     state.bubbles = state.bubbles.filter(b => b.alive);
@@ -611,7 +508,6 @@ function loop(t) {
     if (state.comboTimer <= 0) state.combo = 0;
 
     checkCollisions();
-    updatePowerup(dt);
 
     if (state.score >= lvl.target) {
       nextLevel();
@@ -646,7 +542,6 @@ function loop(t) {
     ctx.shadowBlur = 0;
   }
 
-  ctx.restore();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -666,8 +561,6 @@ function startLevel(idx) {
   state.particles = [];
   state.combo = 0;
   state.comboTimer = 0;
-  state.powerup = null;
-  state.powerupTimer = 0;
   state.lastSpawn = lvl.spawnMs;
   state.running = false;
 
@@ -677,7 +570,6 @@ function startLevel(idx) {
   timeNum.textContent = state.timeLeft;
   updateLives();
   updateTargetBar();
-  powerupIndicator.style.opacity = '0';
 
   showLevelBanner(`Level ${idx+1}: ${lvl.name}`);
 
@@ -691,7 +583,6 @@ function startLevel(idx) {
 
 function tickTimer() {
   if (!state.running) { clearTimer(); return; }
-  if (state.powerup === 'freeze') return;
   state.timeLeft--;
   timeNum.textContent = state.timeLeft;
   if (state.timeLeft <= 0) { clearTimer(); endGame(false); }
