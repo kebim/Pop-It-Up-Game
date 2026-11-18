@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hand Popper 🎈 Enhanced</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Hand Popper 🎈 v3</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -11,7 +11,7 @@
     background: #000; font-family: 'Segoe UI', system-ui, sans-serif;
     color: #fff; user-select: none;
   }
-  #game-container { position: relative; width: 100vw; height: 100vh; }
+  #game-container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
   #video {
     position: absolute; top: 0; left: 0;
     width: 100%; height: 100%; object-fit: cover;
@@ -24,18 +24,31 @@
   }
   #hud {
     position: absolute; top: 0; left: 0; right: 0;
-    padding: 16px 24px; display: flex; justify-content: space-between;
+    padding: 14px 20px; display: flex; justify-content: space-between;
     align-items: center; pointer-events: none; z-index: 10;
     text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    flex-wrap: wrap; gap: 8px;
   }
   .hud-box {
-    background: rgba(0,0,0,0.55); backdrop-filter: blur(10px);
-    padding: 12px 20px; border-radius: 16px;
-    border: 2px solid rgba(255,255,255,0.2);
-    font-weight: 700; font-size: 18px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+    padding: 10px 16px; border-radius: 14px;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    font-weight: 700; font-size: 15px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
-  .hud-box span { color: #ffd54a; font-size: 22px; margin-left: 8px; }
+  .hud-box span { color: #ffd54a; font-size: 18px; margin-left: 6px; }
+  #target-bar {
+    position: absolute; top: 70px; left: 20px; right: 20px;
+    height: 8px; background: rgba(255,255,255,0.15);
+    border-radius: 4px; overflow: hidden; z-index: 10;
+    pointer-events: none;
+  }
+  #target-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #6ee7ff, #ffd54a, #ff6ec7);
+    transition: width 0.3s;
+    box-shadow: 0 0 10px rgba(255,213,74,0.6);
+  }
   #overlay {
     position: absolute; inset: 0; z-index: 20;
     background: radial-gradient(circle at center, rgba(20,20,40,0.9), rgba(0,0,0,0.98));
@@ -43,7 +56,7 @@
     text-align: center; padding: 24px;
   }
   #overlay h1 {
-    font-size: clamp(40px, 8vw, 80px); margin-bottom: 16px;
+    font-size: clamp(36px, 7vw, 72px); margin-bottom: 16px;
     background: linear-gradient(90deg,#ff6ec7,#ffd54a,#6ee7ff);
     -webkit-background-clip: text; background-clip: text; color: transparent;
     letter-spacing: 3px; font-weight: 900;
@@ -53,37 +66,38 @@
     0%, 100% { filter: drop-shadow(0 0 20px rgba(255,110,199,0.5)); }
     50% { filter: drop-shadow(0 0 40px rgba(110,231,255,0.8)); }
   }
-  #overlay p { font-size: 20px; max-width: 600px; line-height: 1.6; opacity: 0.9; margin-bottom: 32px; }
+  #overlay p { font-size: 18px; max-width: 560px; line-height: 1.6; opacity: 0.9; margin-bottom: 28px; }
   #overlay button {
-    padding: 18px 48px; font-size: 22px; font-weight: 800;
+    padding: 16px 44px; font-size: 20px; font-weight: 800;
     border: none; border-radius: 50px; cursor: pointer;
     background: linear-gradient(135deg,#ff6ec7,#6ee7ff);
     color: #111; box-shadow: 0 8px 32px rgba(110,231,255,0.5);
     transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;
   }
-  #overlay button:hover { transform: scale(1.08); box-shadow: 0 12px 40px rgba(110,231,255,0.7); }
-  #overlay button:active { transform: scale(0.98); }
+  #overlay button:hover { transform: scale(1.06); }
+  #overlay button:disabled { opacity: 0.6; cursor: wait; }
   .hidden { display: none !important; }
   #combo-popup {
     position: absolute; top: 35%; left: 50%;
     transform: translate(-50%,-50%) scale(0.5);
-    font-size: 72px; font-weight: 900;
-    color: #ffd54a; text-shadow: 0 0 30px #ff6ec7, 0 0 60px #ff6ec7;
+    font-size: 64px; font-weight: 900;
+    color: #ffd54a; text-shadow: 0 0 30px #ff6ec7;
     opacity: 0; pointer-events: none; z-index: 15;
     transition: all 0.4s cubic-bezier(.2,1.4,.4,1);
   }
   #level-banner {
     position: absolute; top: 30%; left: 50%;
     transform: translate(-50%,-50%) scale(0.3);
-    font-size: 90px; font-weight: 900;
-    color: #fff; text-shadow: 0 0 40px #6ee7ff, 0 0 80px #6ee7ff;
+    font-size: clamp(40px, 8vw, 80px); font-weight: 900;
+    color: #fff; text-shadow: 0 0 40px #6ee7ff;
     opacity: 0; pointer-events: none; z-index: 15;
     transition: all 0.8s cubic-bezier(.2,1.6,.4,1);
+    text-align: center;
   }
   #countdown {
     position: absolute; top: 50%; left: 50%;
     transform: translate(-50%,-50%);
-    font-size: 180px; font-weight: 900;
+    font-size: 160px; font-weight: 900;
     color: #ffd54a; text-shadow: 0 0 60px #ff6ec7;
     opacity: 0; pointer-events: none; z-index: 15;
     transition: all 0.5s cubic-bezier(.2,1.4,.4,1);
@@ -91,13 +105,25 @@
   #powerup-indicator {
     position: absolute; bottom: 24px; left: 50%;
     transform: translateX(-50%);
-    background: rgba(0,0,0,0.7); backdrop-filter: blur(10px);
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(10px);
     padding: 12px 24px; border-radius: 20px;
     border: 2px solid #ffd54a;
-    font-size: 20px; font-weight: 700;
+    font-size: 18px; font-weight: 700;
     opacity: 0; transition: opacity 0.3s;
-    z-index: 10;
+    z-index: 10; pointer-events: none;
   }
+  #loading {
+    position: absolute; inset: 0; z-index: 30;
+    background: #000; display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    color: #fff; font-size: 20px;
+  }
+  .spinner {
+    width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.2);
+    border-top-color: #ffd54a; border-radius: 50%;
+    animation: spin 1s linear infinite; margin-bottom: 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -107,10 +133,11 @@
 
   <div id="hud" class="hidden">
     <div class="hud-box">Level <span id="level-num">1</span></div>
-    <div class="hud-box">Score <span id="score-num">0</span></div>
-    <div class="hud-box">Time <span id="time-num">30</span></div>
+    <div class="hud-box">Score <span id="score-num">0</span> / <span id="target-num">15</span></div>
+    <div class="hud-box">Time <span id="time-num">35</span></div>
     <div class="hud-box">Lives <span id="lives-num">❤❤❤</span></div>
   </div>
+  <div id="target-bar" class="hidden"><div id="target-fill"></div></div>
 
   <div id="combo-popup"></div>
   <div id="level-banner"></div>
@@ -119,8 +146,13 @@
 
   <div id="overlay">
     <h1>HAND POPPER</h1>
-    <p>Pop the bubbles with your <b>fingertips</b>! Use both hands for double the fun. Catch power-ups for special abilities. Reach the target score before time runs out!</p>
+    <p>Pop the bubbles with your <b>fingertips</b>! Use both hands. Catch golden power-ups. Reach the target score before time runs out!</p>
     <button id="start-btn">🎥 Start Game</button>
+  </div>
+
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <div>Loading hand tracking model…</div>
   </div>
 </div>
 
@@ -128,92 +160,61 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js"></script>
 
 <script>
+/* =========================================================
+   HAND POPPER v3.0 — Fixed coordinates & level transitions
+   ========================================================= */
 const video    = document.getElementById('video');
 const canvas   = document.getElementById('canvas');
 const ctx      = canvas.getContext('2d');
 const overlay  = document.getElementById('overlay');
 const startBtn = document.getElementById('start-btn');
 const hud      = document.getElementById('hud');
+const targetBar = document.getElementById('target-bar');
+const targetFill = document.getElementById('target-fill');
 const levelNum = document.getElementById('level-num');
 const scoreNum = document.getElementById('score-num');
+const targetNum = document.getElementById('target-num');
 const timeNum  = document.getElementById('time-num');
 const livesNum = document.getElementById('lives-num');
 const comboPop = document.getElementById('combo-popup');
 const levelBanner = document.getElementById('level-banner');
 const countdownEl = document.getElementById('countdown');
 const powerupIndicator = document.getElementById('powerup-indicator');
+const loadingEl = document.getElementById('loading');
 
-/* ---------- Audio System ---------- */
-class AudioSystem {
-  constructor() {
-    this.ctx = null;
-    this.enabled = true;
-  }
-  init() {
-    if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  }
+/* ---------- Audio ---------- */
+const audio = {
+  ctx: null,
+  init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
   play(type) {
-    if (!this.enabled || !this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    
+    if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    switch(type) {
-      case 'pop':
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(200, now + 0.1);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-        osc.start(now);
-        osc.stop(now + 0.1);
-        break;
-      case 'powerup':
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
-        break;
-      case 'miss':
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        break;
-      case 'levelup':
-        [523, 659, 784].forEach((freq, i) => {
-          const o = this.ctx.createOscillator();
-          const g = this.ctx.createGain();
-          o.connect(g); g.connect(this.ctx.destination);
-          o.frequency.value = freq;
-          g.gain.setValueAtTime(0.2, now + i * 0.1);
-          g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.1 + 0.2);
-          o.start(now + i * 0.1);
-          o.stop(now + i * 0.1 + 0.2);
-        });
-        break;
-    }
+    const tone = (freq, dur, vol = 0.25, type = 'sine') => {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = type; o.frequency.value = freq;
+      o.connect(g); g.connect(this.ctx.destination);
+      g.gain.setValueAtTime(vol, now);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      o.start(now); o.stop(now + dur);
+    };
+    if (type === 'pop') tone(600 + Math.random()*400, 0.08, 0.2);
+    else if (type === 'powerup') { tone(500, 0.15); setTimeout(()=>tone(900, 0.15), 80); }
+    else if (type === 'miss') tone(180, 0.2, 0.2, 'sawtooth');
+    else if (type === 'levelup') { tone(523, 0.15); setTimeout(()=>tone(659, 0.15), 100); setTimeout(()=>tone(784, 0.25), 200); }
   }
-}
-const audio = new AudioSystem();
+};
 
-/* ---------- Level definitions ---------- */
+/* ---------- Levels ---------- */
 const LEVELS = [
-  { name: 'Warm Up',       time: 35, target: 15,  spawnMs: 1400, speed: 0.5, maxBubbles: 5,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.05 },
-  { name: 'Getting Warmer',time: 32, target: 25,  spawnMs: 1100, speed: 0.8, maxBubbles: 7,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
-  { name: 'Speedy',        time: 30, target: 40,  spawnMs: 850,  speed: 1.1, maxBubbles: 9,  colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'], powerupChance: 0.1 },
-  { name: 'Chaos!',        time: 28, target: 55,  spawnMs: 650,  speed: 1.5, maxBubbles: 13, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'], powerupChance: 0.12 },
-  { name: 'Master',        time: 26, target: 75,  spawnMs: 500,  speed: 1.9, maxBubbles: 16, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'], powerupChance: 0.15 },
+  { name: 'Warm Up',        time: 35, target: 15, spawnMs: 1300, speed: 0.5, maxBubbles: 5,  colors: ['#ff6ec7','#6ee7ff'], powerupChance: 0.06 },
+  { name: 'Getting Warmer', time: 32, target: 25, spawnMs: 1000, speed: 0.8, maxBubbles: 7,  colors: ['#ffd54a','#ff6ec7','#6ee7ff'], powerupChance: 0.08 },
+  { name: 'Speedy',         time: 30, target: 40, spawnMs: 800,  speed: 1.1, maxBubbles: 9,  colors: ['#b4f86e','#ff6ec7','#6ee7ff','#ffd54a'], powerupChance: 0.10 },
+  { name: 'Chaos!',         time: 28, target: 55, spawnMs: 600,  speed: 1.5, maxBubbles: 13, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7'], powerupChance: 0.12 },
+  { name: 'Master',         time: 26, target: 75, spawnMs: 450,  speed: 1.9, maxBubbles: 16, colors: ['#ff4d4d','#ffd54a','#6ee7ff','#b4f86e','#ff6ec7','#ffffff'], powerupChance: 0.15 },
 ];
 
-/* ---------- Game state ---------- */
+/* ---------- State ---------- */
 let state = {
   running: false,
   levelIdx: 0,
@@ -222,6 +223,7 @@ let state = {
   timeLeft: 0,
   bubbles: [],
   particles: [],
+  floatTexts: [],
   fingertips: [],
   lastSpawn: 0,
   combo: 0,
@@ -231,9 +233,10 @@ let state = {
   shakeAmount: 0,
   shakeTime: 0,
   timerInterval: null,
+  modelReady: false,
 };
 
-/* ---------- Resize ---------- */
+/* ---------- Canvas sizing ---------- */
 function resize() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -241,14 +244,39 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-/* ---------- MediaPipe Hands ---------- */
+/* ---------- KEY FIX: Map MediaPipe coords to displayed video rect ----------
+   Video uses object-fit: cover, so it may be cropped. MediaPipe returns
+   coords in original video frame space. We must map them to where the
+   video actually appears on screen. Both video and canvas have CSS
+   scaleX(-1), so we do NOT mirror in JS — CSS handles it uniformly. */
+function getVideoRect() {
+  const vw = video.videoWidth  || 1280;
+  const vh = video.videoHeight || 720;
+  const ww = window.innerWidth;
+  const wh = window.innerHeight;
+  const va = vw / vh;
+  const wa = ww / wh;
+  let dw, dh, ox, oy;
+  if (wa > va) {
+    // Window wider than video → video fills width, cropped top/bottom
+    dw = ww; dh = ww / va;
+    ox = 0;  oy = (wh - dh) / 2;
+  } else {
+    // Window taller than video → video fills height, cropped sides
+    dh = wh; dw = wh * va;
+    ox = (ww - dw) / 2; oy = 0;
+  }
+  return { x: ox, y: oy, w: dw, h: dh };
+}
+
+/* ---------- MediaPipe ---------- */
 const hands = new Hands({
   locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
 });
 hands.setOptions({
   maxNumHands: 2,
   modelComplexity: 0,
-  minDetectionConfidence: 0.65,
+  minDetectionConfidence: 0.6,
   minTrackingConfidence: 0.5,
 });
 hands.onResults(onHandResults);
@@ -256,19 +284,32 @@ hands.onResults(onHandResults);
 const TIP_IDS = [4, 8, 12, 16, 20];
 
 function onHandResults(results) {
+  const prev = state.fingertips;
   state.fingertips = [];
+  const rect = getVideoRect();
   if (results.multiHandLandmarks) {
     for (const hand of results.multiHandLandmarks) {
       for (const id of TIP_IDS) {
         const lm = hand[id];
-        // FIX: Mirror x coordinate to match mirrored canvas
+        // Map to displayed video rect. No JS mirroring — CSS mirrors both
+        // video and canvas the same way, so coords align automatically.
         state.fingertips.push({
-          x: (1 - lm.x) * canvas.width,
-          y: lm.y * canvas.height,
+          x: rect.x + lm.x * rect.w,
+          y: rect.y + lm.y * rect.h,
           trail: [],
         });
       }
     }
+  }
+  // Preserve trails across frames for smooth motion
+  if (prev.length === state.fingertips.length) {
+    for (let i = 0; i < prev.length; i++) {
+      state.fingertips[i].trail = prev[i].trail;
+    }
+  }
+  if (!state.modelReady) {
+    state.modelReady = true;
+    loadingEl.classList.add('hidden');
   }
 }
 
@@ -287,64 +328,54 @@ class Bubble {
   constructor(level) {
     this.r = 32 + Math.random() * 28;
     this.x = this.r + Math.random() * (canvas.width - this.r * 2);
-    this.y = canvas.height + this.r;
-    this.vy = -(0.9 + Math.random() * 1.3) * level.speed;
-    this.vx = (Math.random() - 0.5) * 0.7 * level.speed;
+    this.y = canvas.height + this.r + Math.random() * 100;
+    this.vy = -(0.9 + Math.random() * 1.2) * level.speed;
+    this.vx = (Math.random() - 0.5) * 0.6 * level.speed;
     this.color = level.colors[Math.floor(Math.random() * level.colors.length)];
     this.wobble = Math.random() * Math.PI * 2;
     this.alive = true;
     this.points = Math.round(65 - this.r);
     this.isPowerup = Math.random() < level.powerupChance;
-    this.powerupType = this.isPowerup ? ['freeze', 'slow', 'double'][Math.floor(Math.random() * 3)] : null;
-    this.pulsePhase = Math.random() * Math.PI * 2;
+    this.powerupType = this.isPowerup ? ['freeze','slow','double'][Math.floor(Math.random()*3)] : null;
+    this.pulse = Math.random() * Math.PI * 2;
+    this.spawnAnim = 0;
   }
   update(dt) {
+    this.spawnAnim = Math.min(1, this.spawnAnim + dt * 0.004);
     this.wobble += dt * 0.003;
-    this.pulsePhase += dt * 0.005;
+    this.pulse += dt * 0.006;
     this.x += this.vx + Math.sin(this.wobble) * 0.4;
     this.y += this.vy;
-    if (this.y + this.r < 0) {
-      this.alive = false;
-      return 'escaped';
-    }
+    if (this.x < this.r) { this.x = this.r; this.vx *= -1; }
+    if (this.x > canvas.width - this.r) { this.x = canvas.width - this.r; this.vx *= -1; }
+    if (this.y + this.r < 0) { this.alive = false; return 'escaped'; }
     return null;
   }
   draw(ctx) {
-    const pulse = this.isPowerup ? 1 + Math.sin(this.pulsePhase) * 0.15 : 1;
-    const r = this.r * pulse;
-    
-    const grad = ctx.createRadialGradient(
-      this.x - r*0.3, this.y - r*0.3, r*0.1,
-      this.x, this.y, r
-    );
-    
+    const pulse = this.isPowerup ? 1 + Math.sin(this.pulse) * 0.15 : 1;
+    const r = this.r * pulse * this.spawnAnim;
+    const grad = ctx.createRadialGradient(this.x - r*0.3, this.y - r*0.3, r*0.1, this.x, this.y, r);
     if (this.isPowerup) {
       grad.addColorStop(0, '#ffffff');
       grad.addColorStop(0.3, '#ffd54a');
       grad.addColorStop(1, '#ff6ec7');
     } else {
       grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.25, this.color);
-      grad.addColorStop(1, this.color + '88');
+      grad.addColorStop(0.3, this.color);
+      grad.addColorStop(1, this.color + '66');
     }
-    
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(this.x, this.y, r, 0, Math.PI*2);
     ctx.fill();
-    
-    // Shine
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.beginPath();
-    ctx.arc(this.x - r*0.35, this.y - r*0.35, r*0.2, 0, Math.PI*2);
+    ctx.arc(this.x - r*0.35, this.y - r*0.35, r*0.18, 0, Math.PI*2);
     ctx.fill();
-    
-    // Powerup icon
     if (this.isPowerup) {
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${r*0.8}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.font = `bold ${r*0.7}px Arial`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const icon = this.powerupType === 'freeze' ? '❄' : this.powerupType === 'slow' ? '⏱' : '×2';
       ctx.fillText(icon, this.x, this.y);
     }
@@ -353,22 +384,20 @@ class Bubble {
 
 /* ---------- Particle ---------- */
 class Particle {
-  constructor(x, y, color, size = null) {
+  constructor(x, y, color) {
     this.x = x; this.y = y;
     const a = Math.random() * Math.PI * 2;
-    const s = 3 + Math.random() * 6;
+    const s = 3 + Math.random() * 7;
     this.vx = Math.cos(a) * s;
     this.vy = Math.sin(a) * s;
     this.life = 1;
     this.color = color;
-    this.size = size || (3 + Math.random() * 5);
-    this.gravity = 0.18;
+    this.size = 3 + Math.random() * 5;
   }
   update() {
     this.x += this.vx; this.y += this.vy;
-    this.vy += this.gravity;
-    this.vx *= 0.98;
-    this.life -= 0.028;
+    this.vy += 0.2; this.vx *= 0.98;
+    this.life -= 0.03;
   }
   draw(ctx) {
     ctx.globalAlpha = Math.max(0, this.life);
@@ -380,38 +409,51 @@ class Particle {
   }
 }
 
-function burst(x, y, color, n = 20) {
+class FloatText {
+  constructor(x, y, text, color) {
+    this.x = x; this.y = y; this.text = text; this.color = color;
+    this.life = 1; this.vy = -2;
+  }
+  update() { this.y += this.vy; this.vy *= 0.95; this.life -= 0.02; }
+  draw(ctx) {
+    ctx.globalAlpha = Math.max(0, this.life);
+    ctx.fillStyle = this.color;
+    ctx.font = 'bold 28px Segoe UI';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(this.text, this.x, this.y);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function burst(x, y, color, n = 22) {
   for (let i = 0; i < n; i++) state.particles.push(new Particle(x, y, color));
 }
 
-/* ---------- Collision ---------- */
+/* ---------- Collisions ---------- */
 function checkCollisions() {
   for (const b of state.bubbles) {
     if (!b.alive) continue;
     for (const f of state.fingertips) {
       const dx = f.x - b.x, dy = f.y - b.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < b.r + 10) { // Added 10px buffer for better feel
+      if (dx*dx + dy*dy < (b.r + 8) * (b.r + 8)) {
         b.alive = false;
-        
         if (b.isPowerup) {
           activatePowerup(b.powerupType);
           burst(b.x, b.y, '#ffd54a', 30);
+          state.floatTexts.push(new FloatText(b.x, b.y, 'POWER!', '#ffd54a'));
           audio.play('powerup');
         } else {
           burst(b.x, b.y, b.color, 22);
           audio.play('pop');
-          
           state.combo++;
           state.comboTimer = 1500;
           const mult = state.powerup === 'double' ? 4 : Math.min(5, 1 + Math.floor(state.combo / 5));
           const pts = b.points * mult;
           state.score += pts;
           scoreNum.textContent = state.score;
-          
-          if (state.combo > 0 && state.combo % 5 === 0) {
-            showCombo(`x${mult} COMBO!`);
-          }
+          state.floatTexts.push(new FloatText(b.x, b.y, `+${pts}`, '#fff'));
+          updateTargetBar();
+          if (state.combo > 0 && state.combo % 5 === 0) showCombo(`x${mult} COMBO!`);
         }
         break;
       }
@@ -423,29 +465,34 @@ function checkCollisions() {
 function activatePowerup(type) {
   state.powerup = type;
   state.powerupTimer = type === 'freeze' ? 5000 : 6000;
-  
   const text = type === 'freeze' ? '❄️ TIME FROZEN!' : type === 'slow' ? '⏱️ SLOW MOTION!' : '×2️⃣ DOUBLE POINTS!';
   powerupIndicator.textContent = text;
   powerupIndicator.style.opacity = '1';
-  
-  if (type === 'freeze') {
-    state.bubbles.forEach(b => b.vy *= 0.1);
-  } else if (type === 'slow') {
-    state.bubbles.forEach(b => b.vy *= 0.5);
-  }
+  const factor = type === 'freeze' ? 0.05 : 0.5;
+  state.bubbles.forEach(b => { b.vy *= factor; b.vx *= factor; });
 }
-
 function updatePowerup(dt) {
-  if (state.powerup) {
-    state.powerupTimer -= dt;
-    if (state.powerupTimer <= 0) {
-      state.powerup = null;
-      powerupIndicator.style.opacity = '0';
-    }
+  if (!state.powerup) return;
+  state.powerupTimer -= dt;
+  if (state.powerupTimer <= 0) {
+    // Restore bubble speeds based on current level
+    const lvl = LEVELS[state.levelIdx];
+    state.bubbles.forEach(b => {
+      const sign = b.vy < 0 ? -1 : 1;
+      b.vy = sign * (0.9 + Math.random() * 1.2) * lvl.speed;
+      b.vx = (Math.random() - 0.5) * 0.6 * lvl.speed;
+    });
+    state.powerup = null;
+    powerupIndicator.style.opacity = '0';
   }
 }
 
-/* ---------- UI helpers ---------- */
+/* ---------- UI ---------- */
+function updateTargetBar() {
+  const lvl = LEVELS[state.levelIdx];
+  const pct = Math.min(100, (state.score / lvl.target) * 100);
+  targetFill.style.width = pct + '%';
+}
 function showCombo(text) {
   comboPop.textContent = text;
   comboPop.style.opacity = '1';
@@ -455,49 +502,40 @@ function showCombo(text) {
     comboPop.style.transform = 'translate(-50%,-50%) scale(0.7)';
   }, 800);
 }
-
 function showLevelBanner(text) {
   levelBanner.textContent = text;
   levelBanner.style.opacity = '1';
   levelBanner.style.transform = 'translate(-50%,-50%) scale(1)';
   setTimeout(() => {
     levelBanner.style.opacity = '0';
-    levelBanner.style.transform = 'translate(-50%,-50%) scale(1.6)';
-  }, 1600);
+    levelBanner.style.transform = 'translate(-50%,-50%) scale(1.5)';
+  }, 1500);
 }
-
-function showCountdown(num, callback) {
-  countdownEl.textContent = num;
+function showCountdown(n, cb) {
+  countdownEl.textContent = n;
   countdownEl.style.opacity = '1';
   countdownEl.style.transform = 'translate(-50%,-50%) scale(1.5)';
-  
   setTimeout(() => {
     countdownEl.style.opacity = '0';
     countdownEl.style.transform = 'translate(-50%,-50%) scale(0.5)';
     setTimeout(() => {
-      if (num > 1) {
-        showCountdown(num - 1, callback);
-      } else {
+      if (n > 1) showCountdown(n - 1, cb);
+      else {
         countdownEl.textContent = 'GO!';
         countdownEl.style.opacity = '1';
         countdownEl.style.transform = 'translate(-50%,-50%) scale(2)';
         setTimeout(() => {
           countdownEl.style.opacity = '0';
-          callback();
-        }, 600);
+          cb();
+        }, 500);
       }
-    }, 300);
-  }, 700);
+    }, 250);
+  }, 600);
 }
-
 function updateLives() {
-  livesNum.textContent = '❤'.repeat(state.lives) + '♡'.repeat(3 - state.lives);
+  livesNum.textContent = '❤'.repeat(state.lives) + '♡'.repeat(Math.max(0, 3 - state.lives));
 }
-
-function shakeScreen(amount = 8) {
-  state.shakeAmount = amount;
-  state.shakeTime = 300;
-}
+function shakeScreen(a = 8) { state.shakeAmount = a; state.shakeTime = 300; }
 
 /* ---------- Main loop ---------- */
 let lastT = 0;
@@ -505,23 +543,22 @@ function loop(t) {
   const dt = Math.min(50, t - lastT);
   lastT = t;
 
-  // Screen shake
-  let shakeX = 0, shakeY = 0;
+  let sx = 0, sy = 0;
   if (state.shakeTime > 0) {
-    shakeX = (Math.random() - 0.5) * state.shakeAmount;
-    shakeY = (Math.random() - 0.5) * state.shakeAmount;
+    sx = (Math.random() - 0.5) * state.shakeAmount;
+    sy = (Math.random() - 0.5) * state.shakeAmount;
     state.shakeTime -= dt;
     state.shakeAmount *= 0.9;
   }
 
   ctx.save();
-  ctx.translate(shakeX, shakeY);
-  ctx.clearRect(-10, -10, canvas.width + 20, canvas.height + 20);
+  ctx.translate(sx, sy);
+  ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40);
 
   if (state.running) {
     const lvl = LEVELS[state.levelIdx];
     const spawnMult = state.powerup === 'freeze' ? 3 : (state.powerup === 'slow' ? 1.5 : 1);
-    
+
     state.lastSpawn += dt;
     if (state.lastSpawn > lvl.spawnMs * spawnMult && state.bubbles.length < lvl.maxBubbles) {
       state.bubbles.push(new Bubble(lvl));
@@ -534,9 +571,9 @@ function loop(t) {
         state.combo = 0;
         state.lives--;
         updateLives();
-        shakeScreen(12);
+        shakeScreen(14);
         audio.play('miss');
-        if (state.lives <= 0) return endGame(false);
+        if (state.lives <= 0) { endGame(false); ctx.restore(); requestAnimationFrame(loop); return; }
       }
     }
     state.bubbles = state.bubbles.filter(b => b.alive);
@@ -548,42 +585,37 @@ function loop(t) {
     updatePowerup(dt);
 
     if (state.score >= lvl.target) {
-      return nextLevel();
+      nextLevel();
+    } else {
+      for (const b of state.bubbles) b.draw(ctx);
     }
-
-    for (const b of state.bubbles) b.draw(ctx);
   }
 
   for (const p of state.particles) { p.update(); p.draw(ctx); }
   state.particles = state.particles.filter(p => p.life > 0);
+  for (const f of state.floatTexts) { f.update(); f.draw(ctx); }
+  state.floatTexts = state.floatTexts.filter(f => f.life > 0);
 
-  // Draw fingertips with trails
+  // Fingertips with trails
   for (const f of state.fingertips) {
-    // Update trail
     f.trail.push({ x: f.x, y: f.y });
-    if (f.trail.length > 8) f.trail.shift();
-    
-    // Draw trail
+    if (f.trail.length > 10) f.trail.shift();
     for (let i = 0; i < f.trail.length; i++) {
-      const alpha = i / f.trail.length * 0.4;
-      const size = 12 + (i / f.trail.length) * 8;
-      ctx.fillStyle = `rgba(255,213,74,${alpha})`;
+      const a = i / f.trail.length * 0.5;
+      const s = 8 + (i / f.trail.length) * 10;
+      ctx.fillStyle = `rgba(255,213,74,${a})`;
       ctx.beginPath();
-      ctx.arc(f.trail[i].x, f.trail[i].y, size, 0, Math.PI*2);
+      ctx.arc(f.trail[i].x, f.trail[i].y, s, 0, Math.PI*2);
       ctx.fill();
     }
-    
-    // Draw fingertip
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.beginPath();
-    ctx.arc(f.x, f.y, 20, 0, Math.PI*2);
+    ctx.arc(f.x, f.y, 22, 0, Math.PI*2);
     ctx.fill();
-    
     ctx.fillStyle = '#ffd54a';
-    ctx.shadowColor = '#ffd54a';
-    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffd54a'; ctx.shadowBlur = 18;
     ctx.beginPath();
-    ctx.arc(f.x, f.y, 8, 0, Math.PI*2);
+    ctx.arc(f.x, f.y, 9, 0, Math.PI*2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
@@ -594,94 +626,102 @@ function loop(t) {
 requestAnimationFrame(loop);
 
 /* ---------- Level flow ---------- */
+function clearTimer() {
+  if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+}
+
 function startLevel(idx) {
+  clearTimer();
   state.levelIdx = idx;
   const lvl = LEVELS[idx];
   state.timeLeft = lvl.time;
   state.score = 0;
   state.bubbles = [];
   state.particles = [];
+  state.floatTexts = [];
   state.combo = 0;
+  state.comboTimer = 0;
   state.powerup = null;
+  state.powerupTimer = 0;
+  state.lastSpawn = lvl.spawnMs; // spawn first bubble immediately
   state.running = false;
-  
+
   levelNum.textContent = idx + 1;
   scoreNum.textContent = 0;
+  targetNum.textContent = lvl.target;
   timeNum.textContent = state.timeLeft;
   updateLives();
-  
+  updateTargetBar();
+  powerupIndicator.style.opacity = '0';
+
   showLevelBanner(`Level ${idx+1}: ${lvl.name}`);
-  
+
   setTimeout(() => {
     showCountdown(3, () => {
       state.running = true;
-      runTimer();
+      state.timerInterval = setInterval(tickTimer, 1000);
     });
-  }, 1800);
+  }, 1700);
 }
 
-function runTimer() {
-  if (!state.running) return;
-  if (state.timerInterval) clearInterval(state.timerInterval);
-  
-  state.timerInterval = setInterval(() => {
-    if (!state.running) {
-      clearInterval(state.timerInterval);
-      return;
-    }
-    
-    if (state.powerup !== 'freeze') {
-      state.timeLeft--;
-      timeNum.textContent = state.timeLeft;
-      
-      if (state.timeLeft <= 0) {
-        clearInterval(state.timerInterval);
-        endGame(false);
-      }
-    }
-  }, 1000);
+function tickTimer() {
+  if (!state.running) { clearTimer(); return; }
+  if (state.powerup === 'freeze') return;
+  state.timeLeft--;
+  timeNum.textContent = state.timeLeft;
+  if (state.timeLeft <= 0) { clearTimer(); endGame(false); }
 }
 
 function nextLevel() {
   state.running = false;
-  if (state.timerInterval) clearInterval(state.timerInterval);
-  
+  clearTimer();
   audio.play('levelup');
-  
-  if (state.levelIdx + 1 >= LEVELS.length) return endGame(true);
-  
+  if (state.levelIdx + 1 >= LEVELS.length) {
+    setTimeout(() => endGame(true), 1200);
+    return;
+  }
   state.lives = Math.min(3, state.lives + 1);
-  setTimeout(() => startLevel(state.levelIdx + 1), 2000);
+  setTimeout(() => startLevel(state.levelIdx + 1), 1800);
 }
 
 function endGame(won) {
   state.running = false;
-  if (state.timerInterval) clearInterval(state.timerInterval);
-  
+  clearTimer();
   overlay.classList.remove('hidden');
   overlay.querySelector('h1').textContent = won ? '🏆 YOU WIN!' : '💥 Game Over';
   overlay.querySelector('p').innerHTML =
     `You reached <b>Level ${state.levelIdx + 1}</b> with a final score of <b>${state.score}</b>.<br/>Ready to try again?`;
   startBtn.textContent = '🔄 Play Again';
+  startBtn.disabled = false;
   hud.classList.add('hidden');
+  targetBar.classList.add('hidden');
 }
 
 /* ---------- Start ---------- */
 startBtn.addEventListener('click', async () => {
   audio.init();
   startBtn.disabled = true;
-  startBtn.textContent = 'Requesting camera…';
-  
+  startBtn.textContent = 'Starting…';
+  loadingEl.classList.remove('hidden');
+
   try {
     if (!camera) await startCamera();
+    // Wait briefly for model to initialize
+    let waited = 0;
+    while (!state.modelReady && waited < 8000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
+    }
     overlay.classList.add('hidden');
     hud.classList.remove('hidden');
+    targetBar.classList.remove('hidden');
     state.lives = 3;
     startLevel(0);
   } catch (err) {
-    alert('Camera access denied or unavailable: ' + err.message);
+    alert('Camera error: ' + err.message);
     startBtn.disabled = false;
     startBtn.textContent = '🎥 Start Game';
+    loadingEl.classList.add('hidden');
   }
 });
 </script>
